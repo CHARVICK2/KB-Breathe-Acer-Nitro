@@ -77,6 +77,8 @@ Optional flashes for system changes you might not be looking at. Each plays 0-1-
 
 Built for **Acer Nitro laptops with the 4-step keyboard backlight** (the one NitroSense controls). It talks to the keyboard controller over HID and falls back to WMI if that isn't available.
 
+Built on Acer Nitro V15 ANV15-52
+
 **Does it work on your Nitro?** Please [open an issue](../../issues) and tell me your model, so I can build a list.
 
 ## 🛠 Troubleshooting
@@ -97,12 +99,6 @@ build.bat
 ```
 
 This builds `dist\KbBreathe.exe`. The project is a single file, `Program.cs`, with no dependencies.
-
-## ✅ Supported laptops
-
-Acer laptops with the gaming firmware interface that NitroSense and PredatorSense use.
-This was developed on a Nitro V15 ANV15-52.
-If You Tried it on another model- Open an issue and paste the diagnostics from Settings → Troubleshooting → Copy.
 
 ## 🤝 Contributing
 
