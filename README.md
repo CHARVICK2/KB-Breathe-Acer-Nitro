@@ -98,6 +98,12 @@ build.bat
 
 This builds `dist\KbBreathe.exe`. The project is a single file, `Program.cs`, with no dependencies.
 
+## ✅ Supported laptops
+
+Acer laptops with the gaming firmware interface that NitroSense and PredatorSense use.
+This was developed on a Nitro V15 ANV15-52.
+If You Tried it on another model- Open an issue and paste the diagnostics from Settings → Troubleshooting → Copy.
+
 ## 🤝 Contributing
 
 Ideas, bug reports and pull requests are welcome. If a song feels wrong in Sound Sync-Vibe, open an issue with the song and what you expected to see. The tuning constants sit at the top of the `SoundSync` class.
