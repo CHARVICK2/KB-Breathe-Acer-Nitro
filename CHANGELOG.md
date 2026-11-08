@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.1.1 – App icon
+The exe now has its own icon (`icon.ico`), shown in Explorer, the taskbar, the startup list and the tray.
+The window and tray icon are stored inside the program code, so no extra file is needed at run time. New 1280x640 social preview image.
+
 ## 6.1.0 – Sound Sync-Vibe
 A third sound mode (pick **Sound Sync-Vibe** in the Pattern list, it is part of the cycle shortcut too). Three layers
 are stacked and the brightest one wins:
