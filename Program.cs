@@ -119,6 +119,7 @@ sealed class Settings
     public string Custom = "0 1 2 3 4 3 2 1";
     public string Color = "#FFFFFF";
     public int Effect;
+    public int SoundColor;   // 0 single, 1 duo, 2 warm, 3 cool, 4 rainbow
     public int[] HkMod = (int[])Hk.DefMod.Clone();
     public int[] HkKey = (int[])Hk.DefKey.Clone();
 
@@ -138,11 +139,12 @@ sealed class Settings
                 s.ReactUnplug = Get(k, "ReactUnplug", 0) != 0;
                 s.Speed = M.Clamp(Get(k, "Speed", 550), 120, 2000);
                 s.SpeedTab = M.Clamp(Get(k, "SpeedTab", 2), 0, 4);
-                s.Pattern = Math.Max(0, Get(k, "Pattern", 0));
+                s.Pattern = MapPattern(Math.Max(0, Get(k, "Pattern", 0)));
                 s.Sens = M.Clamp(Get(k, "Sens", 5), 1, 10);
                 s.Custom = k.GetValue("Custom") as string ?? s.Custom;
                 s.Color = k.GetValue("Color") as string ?? s.Color;
                 s.Effect = M.Clamp(Get(k, "Effect", 0), 0, ColorFx.Count - 1);
+                s.SoundColor = M.Clamp(Get(k, "SoundColor", 0), 0, SoundPalette.Count - 1);
                 for (int i = 0; i < Hk.Count; i++)
                 {
                     s.HkMod[i] = Get(k, "Bind" + i + "Mod", Hk.DefMod[i]);
@@ -155,6 +157,19 @@ sealed class Settings
     }
 
     private static int Get(RegistryKey k, string name, int def) => k.GetValue(name) is int v ? v : def;
+
+    // The old eleven-preset list is now five. Saved numbers from that list land on the
+    // closest surviving mode instead of on an index that no longer exists.
+    private static int MapPattern(int old) => old switch
+    {
+        5 => 3,              // Fade out
+        6 => 0,              // Pulse
+        7 => 4,              // Custom
+        8 => 2,              // Sound Sync #2 (Beat)
+        9 => 1,              // Sound Sync (Overall) -> #1 Vibe
+        10 => 1,             // Sound Sync-Vibe -> #1 Vibe
+        _ => 0               // waves -> Pulse
+    };
 
     public void Save()
     {
@@ -174,6 +189,7 @@ sealed class Settings
             k.SetValue("Custom", Custom, RegistryValueKind.String);
             k.SetValue("Color", Color, RegistryValueKind.String);
             k.SetValue("Effect", Effect, RegistryValueKind.DWord);
+            k.SetValue("SoundColor", SoundColor, RegistryValueKind.DWord);
             for (int i = 0; i < Hk.Count; i++)
             {
                 k.SetValue("Bind" + i + "Mod", HkMod[i], RegistryValueKind.DWord);
@@ -1093,20 +1109,18 @@ sealed class MainForm : Form
     private static readonly string[] SpeedNames = { "Glacial", "Calm", "Steady", "Swift", "Turbo" };
     private static readonly int[] SpeedMs = { 1400, 900, 550, 320, 160 };
 
+    // Five modes only: two breathing/visual patterns, the two sound engines, and Custom.
     private static readonly (string Name, int[] Levels)[] Presets =
     {
-        ("Soft wave",   new[] { 1, 2, 3, 4, 3, 2, 1 }),
-        ("Deep wave",   new[] { 0, 1, 2, 3, 4, 3, 2, 1, 0 }),
-        ("Rise 1–4",    new[] { 1, 2, 3, 4 }),
-        ("Rise 0–4",    new[] { 0, 1, 2, 3, 4 }),
-        ("Gentle wave", new[] { 2, 3, 4, 3, 2 }),
-        ("Fade out",    new[] { 4, 3, 2, 1, 0 }),
-        ("Pulse",       new[] { 0, 4, 0, 4 }),
-        ("Custom",         new int[0]),
-        ("Sound Sync-Beat", new int[0]),   // beat only (this was "Sound sync" in 6.0.x, so saved numbers still match)
-        ("Sound Sync",     new int[0]),    // follows the whole tune, not only the beat
-        ("Sound Sync-Vibe", new int[0]),   // beat = 4, highs = 3, vocals/mids = 1-2, silence = 0
+        ("Pulse",                new[] { 0, 4, 0, 4 }),
+        ("Sound Sync #1 (Vibe)", new int[0]),   // beat = 4, highs = 3, vocals/mids = 1-2, silence = 0
+        ("Sound Sync #2 (Beat)", new int[0]),   // kick / snare attacks only
+        ("Fade out",             new[] { 4, 3, 2, 1, 0 }),
+        ("Custom",               new int[0]),
     };
+
+    // The SOUND page is for the two audio engines only. Pulse, Fade out and Custom stay on DASH.
+    private static readonly string[] SoundModeNames = { "VIBE", "BEAT" };
 
     private readonly Settings _s;
     private bool _startHidden;
@@ -1139,6 +1153,14 @@ sealed class MainForm : Form
     private readonly LevelMeter _meter;
     private readonly Preview _preview;
     private readonly ActionButton _go;
+    // sound page
+    private readonly CapLabel _soundCap, _soundCtlCap, _soundStyleCap;
+    private readonly Tabs _soundModes, _soundStyles;
+    private readonly Label _soundDesc, _soundLbl, _soundVal, _soundStyleHint;
+    private readonly RoundPanel _soundCard;
+    private readonly Slider _soundSens;
+    private readonly LevelMeter _soundMeter;
+    private volatile int _soundStyle;
     // keys page
     private readonly CapLabel _keysCap;
     private readonly LinkButton _resetKeys;
@@ -1187,10 +1209,10 @@ sealed class MainForm : Form
 
     private const int WmHotkey = 0x0312, ModNoRepeat = 0x4000;
 
-    // Preset order: ... Custom, Sound Sync-Beat, Sound Sync, Sound Sync-Vibe (the sound modes are always last)
-    private bool IsCustom => _pattern == Presets.Length - 4;
-    private bool IsSound => _pattern >= Presets.Length - 3;
-    private int SoundModeIndex => _pattern - (Presets.Length - 3);   // 0 beat, 1 overall, 2 vibe
+    // Preset order: Pulse, Sound Sync #1 (Vibe), Sound Sync #2 (Beat), Fade out, Custom.
+    private bool IsCustom => _pattern == 4;
+    private bool IsSound => _pattern == 1 || _pattern == 2;
+    private int SoundModeIndex => _pattern == 1 ? 2 : 0;   // SoundSync: 0 beat, 2 vibe
 
     private static Label Lbl(string text, Font f, Color c, Color back, ContentAlignment align) => new Label
     {
@@ -1240,7 +1262,7 @@ sealed class MainForm : Form
             _s.Color = _swatches.Selection.ToHex();
             _s.Save();
             RgbKeyboard.Color = _swatches.Selection;
-            if (_syncRunning) return;   // screen sync owns the LEDs right now
+            if (_syncRunning || _running) return;   // an engine already owns the LEDs
             ApplyEffect();              // show the choice right away, in whichever effect is selected
         };
         _colorCard.Controls.Add(_swatches);
@@ -1310,6 +1332,50 @@ sealed class MainForm : Form
         _go = new ActionButton { Caption = "Start", Glyph = Ico.Play };
         _go.Click += (_, _) => ToggleRun();
 
+        // ---- sound page: the two audio engines and their colour styles (RGB four-zone models only)
+        _soundCap = new CapLabel { Caption = "SOUND SYNC" };
+        _soundModes = new Tabs { Items = SoundModeNames };
+        _soundDesc = Lbl("", Fonts.Small, Th.Muted, Th.Bg, ContentAlignment.MiddleLeft);
+        _soundCtlCap = new CapLabel { Caption = "SENSITIVITY" };
+        _soundCard = new RoundPanel { BackColor = Th.Bg };
+        _soundLbl = Lbl("Sensitivity", Fonts.Body, Th.Text, Th.Card, ContentAlignment.MiddleLeft);
+        _soundVal = Lbl("", Fonts.Strong, Th.Text, Th.Card, ContentAlignment.MiddleRight);
+        _soundSens = new Slider { Minimum = 1, Maximum = 10, Step = 1, Value = s.Sens };
+        _soundSens.ValueChanged += (_, _) =>
+        {
+            _sensVal = _soundSens.Value;
+            _sens.Value = _soundSens.Value;
+            UpdateDelay();
+        };
+        _soundMeter = new LevelMeter();
+        _soundCard.Controls.Add(_soundLbl);
+        _soundCard.Controls.Add(_soundVal);
+        _soundCard.Controls.Add(_soundSens);
+        _soundCard.Controls.Add(_soundMeter);
+
+        _soundStyle = M.Clamp(s.SoundColor, 0, SoundPalette.Count - 1);
+        _soundStyleCap = new CapLabel { Caption = "COLOUR WHILE SYNCING" };
+        _soundStyles = new Tabs { Items = SoundPalette.Caps, Selected = _soundStyle };
+        _soundStyles.SelectedChanged += (_, _) =>
+        {
+            _soundStyle = _soundStyles.Selected;
+            _s.SoundColor = _soundStyle;
+            _s.Save();
+        };
+        _soundStyleHint = Lbl("Single uses the COLOR swatch. Duo, Warm, Cool and Rainbow split the four zones while Sound Sync runs.",
+            Fonts.Small, Th.Dim, Th.Bg, ContentAlignment.MiddleLeft);
+
+        // Keep the two copies of sensitivity in step; the DASH and SOUND pages share one value.
+        _sens.ValueChanged += (_, _) =>
+        {
+            if (_soundSens.Value != _sens.Value) _soundSens.Value = _sens.Value;
+        };
+
+        _soundModes.SelectedChanged += (_, _) =>
+        {
+            if (_soundModes.Selected >= 0) SetPattern(_soundModes.Selected == 1 ? 2 : 1);
+        };
+
         // ---- keys page
         _keysCap = new CapLabel { Caption = "GLOBAL SHORTCUTS" };
         _resetKeys = new LinkButton { Caption = "RESET DEFAULTS" };
@@ -1362,6 +1428,8 @@ sealed class MainForm : Form
         // earlier in the list = higher in z-order (close button must sit above the header)
         Controls.AddRange(new Control[] { _closeBtn, _header, _nav,
             _stats, _patCap, _patCard, _speedCap, _tabs, _preview, _speedCard, _go,
+            _soundCap, _soundModes, _soundDesc, _soundCtlCap, _soundCard,
+            _soundStyleCap, _soundStyles, _soundStyleHint,
             _colorCap, _colorCard, _syncCap, _syncCard, _zones, _syncHint,
             _keysCap, _resetKeys, _keysCard, _keysNote,
             _about, _startCap, _card,
@@ -1496,6 +1564,7 @@ sealed class MainForm : Form
         _s.SpeedTab = _tabs.Selected;
         _s.Pattern = _pattern;
         _s.Custom = _customText;
+        _s.SoundColor = _soundStyle;
         _s.Tray = _trayRow.Checked;
         _s.StartMin = _minRow.Checked;
         _s.Auto = _autoRow.Checked;
@@ -1571,21 +1640,22 @@ sealed class MainForm : Form
     }
 
     // ---- pages + layout (all numbers are 96-dpi units, scaled once here; window size is fixed)
-    private const int PageDash = 0, PageColor = 1, PageKeys = 2, PageReact = 3, PageSettings = 4;
+    private const int PageDash = 0, PageSound = 1, PageColor = 2, PageKeys = 3, PageReact = 4, PageSettings = 5;
 
     private int[] _navPages = { PageDash, PageKeys, PageReact, PageSettings };
 
     private int NavPage(int navIndex) =>
         navIndex >= 0 && navIndex < _navPages.Length ? _navPages[navIndex] : PageDash;
 
-    // The COLOR tab exists only when the keyboard has the colour controller, so a model without it
-    // keeps the original DASH | KEYS | REACT | SETTINGS strip instead of a dead tab.
+    // SOUND and COLOR exist only when the keyboard has the four-zone colour controller. A model
+    // without it keeps the original DASH | KEYS | REACT | SETTINGS strip, with sound modes still
+    // available from the DASH pattern selector.
     private void SetupNav()
     {
         if (_rgb)
         {
-            _nav.Items = new[] { "DASH", "COLOR", "KEYS", "REACT", "SETTINGS" };
-            _navPages = new[] { PageDash, PageColor, PageKeys, PageReact, PageSettings };
+            _nav.Items = new[] { "DASH", "SOUND", "COLOR", "KEYS", "REACT", "SETTINGS" };
+            _navPages = new[] { PageDash, PageSound, PageColor, PageKeys, PageReact, PageSettings };
         }
         else
         {
@@ -1604,6 +1674,14 @@ sealed class MainForm : Form
 
     private void SetPage(int p)
     {
+        // SOUND is built only for the four-zone colour controller. Opening it while a non-audio
+        // pattern is selected picks the first audio engine so the page always has a valid subject.
+        if (p == PageSound)
+        {
+            if (!_rgb) p = PageDash;
+            else if (!IsSound) SetPattern(1);
+        }
+
         _page = p;
         LayoutUi();
     }
@@ -1614,15 +1692,17 @@ sealed class MainForm : Form
         int D(float v) => (int)Math.Round(v * k);
 
         const int W = 420, H = 510, M0 = 20, CW = 380, HeadH = 48, NavH = 36, Top = HeadH + NavH + 16;
-        bool custom = IsCustom, sound = IsSound, dash = _page == PageDash, color = _page == PageColor,
-             keys = _page == PageKeys, react = _page == PageReact, sett = _page == PageSettings;
+        bool custom = IsCustom, sound = IsSound, dash = _page == PageDash, soundPage = _page == PageSound,
+             soundUi = soundPage && _rgb && sound,
+             color = _page == PageColor, keys = _page == PageKeys, react = _page == PageReact, sett = _page == PageSettings;
 
         _header.SetBounds(0, 0, D(W), D(HeadH));
         _closeBtn.SetBounds(D(W - 20 - 28), D(10), D(28), D(28));
         _nav.SetBounds(0, D(HeadH), D(W), D(NavH));
 
         // ---- dash
-        _about.Visible = _patCap.Visible = _patCard.Visible = _speedCap.Visible = _go.Visible = dash;
+        _about.Visible = _patCap.Visible = _patCard.Visible = _speedCap.Visible = dash;
+        _go.Visible = dash || soundUi;
         _tabs.Visible = _preview.Visible = dash && !custom && !sound;
         _speedCard.Visible = dash && (custom || sound);
         _slider.Visible = custom;
@@ -1672,6 +1752,28 @@ sealed class MainForm : Form
             _preview.SetBounds(D(M0), D(y), D(CW), D(76));
         }
         _go.SetBounds(D(M0), D(H - 20 - 44), D(CW), D(44));
+
+        // ---- sound (RGB four-zone models only; this page only ever shows an audio engine)
+        _soundCap.Visible = _soundModes.Visible = _soundDesc.Visible =
+            _soundCtlCap.Visible = _soundCard.Visible = soundUi;
+        _soundStyleCap.Visible = _soundStyles.Visible = _soundStyleHint.Visible = soundUi;
+        y = Top;
+        _soundCap.SetBounds(D(M0), D(y), D(200), D(16));
+        y += 20;
+        _soundModes.SetBounds(D(M0), D(y), D(CW), D(42));
+        y += 42 + 8;
+        _soundDesc.SetBounds(D(M0), D(y), D(CW), D(18));
+        y += 26;
+        _soundCtlCap.SetBounds(D(M0), D(y), D(240), D(16));
+        y += 20;
+        _soundCard.SetBounds(D(M0), D(y), D(CW), D(116));
+        _soundLbl.SetBounds(D(14), D(8), D(200), D(24));
+        _soundVal.SetBounds(D(CW - 14 - 110), D(8), D(110), D(24));
+        _soundSens.SetBounds(D(10), D(36), D(CW - 20), D(32));
+        _soundMeter.SetBounds(D(14), D(82), D(CW - 28), D(30));
+        _soundStyleCap.SetBounds(D(M0), D(344), D(240), D(16));
+        _soundStyles.SetBounds(D(M0), D(364), D(CW), D(42));
+        _soundStyleHint.SetBounds(D(M0), D(410), D(CW), D(28));
 
         // ---- colour
         _colorCap.Visible = _colorCard.Visible = _effectCap.Visible = _effectCard.Visible =
@@ -1783,14 +1885,34 @@ sealed class MainForm : Form
     }
 
     // ---- pattern / speed (all of this applies instantly, also while breathing)
+    private string SoundDescription() => _pattern switch
+    {
+        0 => "A slow on-off pulse. No audio needed.",
+        1 => "Beat, highs and voice each get their own brightness.",
+        2 => "Only kick and snare hits light the keys.",
+        3 => "Steps down 4-3-2-1-0 and repeats. No audio needed.",
+        _ => "Your own 0-4 sequence, played at the chosen speed."
+    };
+
     private void SetPattern(int idx)
     {
         _pattern = idx;
         _select.Caption = Presets[idx].Name;
+        _soundModes.Selected = IsSound ? (_pattern == 2 ? 1 : 0) : -1;
+        _soundDesc.Text = SoundDescription();
         _preview.SetPattern(IsCustom ? new int[0] : Presets[idx].Levels);
         if (_presetMenu != null)
             for (int i = 0; i < _presetMenu.Items.Count; i++)
                 if (_presetMenu.Items[i] is ToolStripMenuItem mi) mi.Checked = i == idx;
+        // The SOUND page only describes the two audio engines. If a shortcut changes the pattern
+        // to Pulse, Fade out or Custom while it is open, go back to DASH instead of showing a
+        // mismatched page.
+        if (_page == PageSound && !IsSound)
+        {
+            _page = PageDash;
+            if (_nav.Selected != 0) _nav.Selected = 0;
+        }
+
         RefreshLevels();
         UpdateDelay();
         LayoutUi();
@@ -1800,6 +1922,8 @@ sealed class MainForm : Form
     {
         _delay = IsCustom ? _slider.Value : SpeedMs[_tabs.Selected];
         _speedVal.Text = IsSound ? _sens.Value + " / 10" : _slider.Value + " ms";
+        if (_soundVal.Visible)
+            _soundVal.Text = _sens.Value + " / 10";
         UpdateModeText();
     }
 
@@ -2116,7 +2240,8 @@ sealed class MainForm : Form
     private async Task RunSound(Backend backend, CancellationToken token, int ver)
     {
         using var snd = new SoundSync();   // throws a readable error if no audio device is available
-        int last = -1;
+        var zones = new RgbColor[4];
+        int last = -1, lastStyle = -1;
         while (ver == _ver && !token.IsCancellationRequested)
         {
             snd.Sensitivity = _sensVal;
@@ -2124,11 +2249,20 @@ sealed class MainForm : Form
             snd.Process();
             int lvl = snd.Level;
             if (_reacting) { last = -1; await Task.Delay(8, token).ConfigureAwait(false); continue; }
-            if (lvl != last)
+            if (lvl != last || _soundStyle != lastStyle)
             {
                 last = lvl;
+                lastStyle = _soundStyle;
                 int pct = LevelBrightness[M.Clamp(lvl, 0, 4)];
-                bool ok = Apply(backend, pct);
+                bool ok;
+                // Colour styles split the four zones, so they go out as zone packets. Single
+                // colour (0) and every non-RGB backend keep the original one-packet path.
+                if (backend == Backend.Rgb && _soundStyle > 0 && lvl > 0)
+                {
+                    SoundPalette.Zones(_soundStyle, RgbKeyboard.Color, zones);
+                    ok = RgbKeyboard.SetZones(zones, pct);
+                }
+                else ok = Apply(backend, pct);
                 if (_uiVisible)
                     Post(() =>
                     {
@@ -3063,7 +3197,7 @@ static class ColorFx
         }
     }
 
-    private static RgbColor Hsv(double hue, double saturation, double value)
+    public static RgbColor Hsv(double hue, double saturation, double value)
     {
         hue = ((hue % 360) + 360) % 360;
         double c = value * saturation;
@@ -3082,6 +3216,44 @@ static class ColorFx
             (byte)Math.Round((r + m) * 255),
             (byte)Math.Round((g + m) * 255),
             (byte)Math.Round((b + m) * 255));
+    }
+}
+
+// Sound Sync colour styles for the RGB controller. Five types, each one to four colours across
+// the four zones. Single (0) is the normal one-colour path and does not go through here.
+static class SoundPalette
+{
+    public static readonly string[] Names = { "Single", "Duo", "Warm", "Cool", "Rainbow" };
+    public static readonly string[] Caps = { "SINGLE", "DUO", "WARM", "COOL", "RAINBOW" };
+    public static int Count => Names.Length;
+
+    public static void Zones(int style, RgbColor baseColor, RgbColor[] zones)
+    {
+        switch (style)
+        {
+            case 1:   // Duo: the selected colour and white, alternating
+                zones[0] = zones[2] = baseColor;
+                zones[1] = zones[3] = RgbColor.White;
+                break;
+            case 2:   // Warm
+                zones[0] = new RgbColor(255, 90, 54);
+                zones[1] = new RgbColor(255, 179, 71);
+                zones[2] = new RgbColor(255, 46, 136);
+                zones[3] = new RgbColor(255, 209, 102);
+                break;
+            case 3:   // Cool
+                zones[0] = new RgbColor(0, 217, 255);
+                zones[1] = new RgbColor(58, 134, 255);
+                zones[2] = new RgbColor(123, 97, 255);
+                zones[3] = new RgbColor(0, 245, 212);
+                break;
+            case 4:   // Rainbow: one spectrum quarter per zone
+                for (int i = 0; i < zones.Length; i++) zones[i] = ColorFx.Hsv(i * 90, 1, 1);
+                break;
+            default:
+                for (int i = 0; i < zones.Length; i++) zones[i] = baseColor;
+                break;
+        }
     }
 }
 

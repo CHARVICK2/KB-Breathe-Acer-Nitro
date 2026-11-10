@@ -1,6 +1,21 @@
 # Changelog
 
-## 6.2 – Keyboard effects and rainbow modes
+## 6.2 – Keyboard effects, sound colours, and the SOUND tab
+The mode list is now five entries instead of eleven: **Pulse**, **Sound Sync #1 (Vibe)**, **Sound Sync #2 (Beat)**,
+**Fade out** and **Custom**. The waves, Rise and Overall entries are gone; old saved pattern numbers are mapped onto
+the closest surviving mode when the app starts.
+
+- **New SOUND tab on four-zone RGB models** (`DASH | SOUND | COLOR | KEYS | REACT | SETTINGS`). It holds only the
+  two Sound Sync engines (**Vibe** and **Beat**), their description, sensitivity, the live level meter, the five
+  colour styles and the same Start / Stop button as DASH. Pulse, Fade out and Custom stay on DASH, and a shortcut
+  that selects one of them while SOUND is open returns to DASH.
+- **Sound colours (RGB only):** five styles — **Single**, **Duo**, **Warm**, **Cool** and **Rainbow** — split the
+  four zones while either Sound Sync engine runs. The row is built only when the colour controller answers, so it
+  never appears on brightness-only laptops. Single keeps the one-packet path; the other styles send one packet per
+  zone on each level change.
+- The SOUND tab shares the sensitivity value with DASH, so either page can be used without the two drifting apart.
+  Brightness-only models have no SOUND tab; their Vibe and Beat modes remain in the DASH pattern selector.
+
 The COLOR tab gains an **EFFECT** list under the colour swatches:
 
 - **Firmware effects:** **Breathing**, **Neon**, **Wave**, **Ripple**, **Zoom**, **Snake** and **Disco**. These are
@@ -16,8 +31,8 @@ The COLOR tab gains an **EFFECT** list under the colour swatches:
 - Picking a colour while an effect runs re-sends the effect in the new colour, no restart needed.
 - Software flows drop to about 8 fps while the window is hidden in the tray, so the app stays light; the firmware
   effects cost nothing after their single packet.
-- The window, tab strip and colour page are unchanged in size (420 x 510), and brightness-only models still get the
-  original four tabs with no effect list.
+- The window and colour page are unchanged in size (420 x 510). Brightness-only models get neither SOUND nor COLOR,
+  no effect list and no Sound colours row; the strip stays `DASH | KEYS | REACT | SETTINGS`.
 
 ## 6.1 – More Acer models, colour, and screen sync
 KB Breathe now probes the same keyboard interfaces as [Nitrous](https://github.com/jeremyaliparo/nitrous), so it works

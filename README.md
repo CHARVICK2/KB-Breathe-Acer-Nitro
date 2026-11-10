@@ -12,7 +12,7 @@
 
 [![Download KB Breathe](https://img.shields.io/badge/%E2%AC%87%20Download-latest%20version-6366F1?style=for-the-badge)](../../releases/latest)
 
-**6.2 adds keyboard effects: the controller's own animations plus app-drawn rainbow flows.**
+**6.2 adds keyboard effects, an RGB-only SOUND tab, and sound colours.**
 
 **One tiny `.exe`. No installer. No drivers. Nothing else to install.**
 
@@ -30,16 +30,17 @@ It lives in your system tray, starts with Windows if you want, and has global sh
 
 ## Features
 
-- 🌬 **7 breathing patterns plus Custom.** Soft wave, Deep wave, Rise 1–4, Rise 0–4, Gentle wave, Fade out and Pulse, or write your own sequence with **Custom**. Five speed presets from *Glacial* to *Turbo*.
-- 🎵 **Three Sound Sync modes.** Beat, Overall and **Vibe** (see below). Works with anything playing on your PC: Spotify, YouTube, games, local files.
-- 🎨 **COLOR tab on RGB keyboards.** Pick a colour for the patterns, reactions and Sound Sync, pick an **effect** — the controller's own Breathing, Neon, Wave, Ripple, Zoom, Snake and Disco, plus **Rainbow flow** and **Rainbow wave** — or turn on **Screen colour sync**: the four zones take the colour of the four quarters of your screen and follow it eight times a second, like Nitrous. All of it lives on a tab that only exists when the hardware answers, so models without the controller keep the original four tabs.
+- 🌬 **Five modes, no clutter.** Pulse, **Sound Sync #1 (Vibe)**, **Sound Sync #2 (Beat)**, Fade out, or write your own sequence with **Custom**. Five speed presets from *Glacial* to *Turbo*.
+- 🎵 **A SOUND tab on four-zone RGB keyboards.** The two Sound Sync engines, the sensitivity slider, the live meter and the start/stop button sit together on **SOUND**. Works with anything playing on your PC: Spotify, YouTube, games, local files. Pulse, Fade out and Custom stay on **DASH**, where every model can reach them.
+- 🌈 **Sound colours on RGB keyboards.** Five styles — Single, Duo, Warm, Cool and Rainbow — split the four zones while Sound Sync runs. They live on the **SOUND** tab and exist only on keyboards with the four-zone colour controller.
+- 🎨 **COLOR tab on RGB keyboards.** Pick a colour for the patterns, reactions and Sound Sync, pick an **effect** — the controller's own Breathing, Neon, Wave, Ripple, Zoom, Snake and Disco, plus **Rainbow flow** and **Rainbow wave** — or turn on **Screen colour sync**: the four zones take the colour of the four quarters of your screen and follow it eight times a second, like Nitrous. All of it lives on a tab that only exists when the hardware answers, so models without the controller keep the four-tab strip and no COLOR tab.
 - ⌨ **Global shortcuts.** Change mode or start/stop from anywhere, even with the window hidden.
 - 🔔 **Keyboard reactions.** A little flash when you change power mode, plug in the charger, or unplug it.
 - ⚡ **Live changes.** Switch pattern, speed or sensitivity while it runs. It applies instantly.
 - 🪶 **Tiny and quiet.** One exe of about 180 KB, using the .NET Framework that is already part of Windows.
 - 🎛 **Clean dark UI** with a live level meter, tray icon and startup options.
 
-## Sound Sync-Vibe
+## Sound Sync
 
 <div align="center">
 <img src="vibe-levels.png" alt="Sound Sync-Vibe maps beats to level 4, highs to 3, voice to 1 and 2, and silence to 0" width="760">
@@ -47,7 +48,7 @@ It lives in your system tray, starts with Windows if you want, and has global sh
 
 <br>
 
-Pick **Sound Sync-Vibe** from the pattern list. Three layers run together and the brightest one wins:
+Pick **Sound Sync #1 (Vibe)** from the DASH pattern selector, or from the **SOUND** tab on a four-zone RGB keyboard. Three layers run together and the brightest one wins:
 
 - **Beat → 4.** A kick or snare punches the keys to full for a moment, then drops straight to whatever is still playing.
 - **Highs → 3.** Hi-hats, cymbals and "s" sounds. Soft or ghost hits also land here.
@@ -58,9 +59,24 @@ It adapts to each song's loudness on its own, and the **Sensitivity** slider (1 
 
 | Mode | What it does | Best for |
 |---|---|---|
-| **Sound Sync-Vibe** | Beat, highs and voice each get their own brightness | Music with vocals, general "vibe" |
-| **Sound Sync-Beat** | Only kick/snare hits flash the keys, sustained sound stays dark | Electronic, drums, bass-heavy tracks |
-| **Sound Sync** | Follows the whole tune's loudness, smoothly | Ambient, cinematic, background listening |
+| **Sound Sync #1 (Vibe)** | Beat, highs and voice each get their own brightness | Music with vocals, general "vibe" |
+| **Sound Sync #2 (Beat)** | Only kick/snare hits flash the keys, sustained sound stays dark | Electronic, drums, bass-heavy tracks |
+
+### Sound colours (RGB only)
+
+On a keyboard with the four-zone colour controller, the bottom of the **SOUND** tab has five **Sound colours** styles:
+
+| Style | What the four zones do |
+|---|---|
+| **Single** | The current COLOR swatch, one packet, exactly as before. |
+| **Duo** | The chosen colour and white alternate across the zones. |
+| **Warm** | Orange, amber, pink and gold. |
+| **Cool** | Cyan, blue, violet and teal. |
+| **Rainbow** | One quarter of the spectrum per zone. |
+
+The style applies while **Sound Sync #1** or **#2** is running; the brightness still follows the audio. Pulse, Fade out
+and Custom keep using the single COLOR colour. Brightness-only models have no **SOUND** tab and no **Sound colours**
+row; their two Sound Sync modes stay available in the DASH pattern selector.
 
 > **Heads-up:** a frequency split can't tell a singer from a guitar or synth lead, so "voice" means any sustained sound between 300 Hz and 3.4 kHz. Pitch is relative to each song's own range.
 
@@ -69,12 +85,13 @@ It adapts to each song's loudness on its own, and the **Sensitivity** slider (1 
 | Tab | What is on it |
 |---|---|
 | **DASH** | Pattern, speed, live preview and Start / Stop. |
+| **SOUND** | Four-zone RGB keyboards only: Vibe / Beat, sensitivity and live meter, plus the five **Sound colours** styles. |
 | **COLOR** | Keyboard colour, keyboard effects and screen colour sync. Only exists when the keyboard has the four-zone colour controller. |
 | **KEYS** | The two global shortcuts, rebindable. |
 | **REACT** | The optional keyboard flashes for power-mode and charger changes. |
 | **SETTINGS** | Live status (level, backend, mode) and the startup options. |
 
-On brightness-only keyboards the COLOR tab is not built at all, so the strip stays **DASH | KEYS | REACT | SETTINGS**.
+On brightness-only keyboards neither **SOUND** nor **COLOR** is built, so the strip stays **DASH | KEYS | REACT | SETTINGS**. Their two Sound Sync engines remain in the DASH pattern selector; there is no colour row to show on a single-colour backlight.
 
 ## Colour and screen sync
 
@@ -83,7 +100,8 @@ drives). It has three parts.
 
 **Keyboard colour.** Nine swatches, from white through warm and cool to pink. The choice is saved, and the breathing
 patterns, reactions and Sound Sync then run in that colour instead of white. Picking a colour while a pattern runs
-takes effect on the next step, so nothing has to be restarted.
+takes effect on the next step, so nothing has to be restarted. The **SOUND** tab's **Sound colours** row can also
+split that colour across the four zones while Sound Sync runs (see below).
 
 **Keyboard effects.** The **EFFECT** list under the swatches runs the controller's own animations in your chosen
 colour: **Breathing**, **Neon**, **Wave**, **Ripple**, **Zoom**, **Snake** and **Disco**. These are firmware modes, so
@@ -155,9 +173,10 @@ KB Breathe drives the keyboard through whichever Acer interface your model has, 
 | Acer EC HID | 0-4 brightness steps | 2024+ Nitro / Predator |
 | Acer WMI (`APGeAction`, then `Acer_Gaming`) | 0-4 brightness steps | Nitro V 15 (`ANV15-41`) and other WMI-only models |
 
-The **COLOR** tab is only built when the colour controller is present; on the brightness-only models it is hidden,
-the same way Nitrous hides its light page, and the strip stays **DASH | KEYS | REACT | SETTINGS**. Patterns, reactions
-and Sound Sync work on all three paths.
+The **SOUND** and **COLOR** tabs are only built when the four-zone colour controller is present; on the
+brightness-only models they are hidden, the same way Nitrous hides its light page, and the strip stays
+**DASH | KEYS | REACT | SETTINGS**. Patterns, reactions and Sound Sync work on all three paths: without the
+controller, pick Vibe or Beat from the DASH pattern selector.
 
 The path in use is shown on the **SETTINGS** page as **BACKEND** (`RGB`, `EC`, `WMI KB` or `WMI`), so an issue report
 can say exactly which interface answered.
@@ -191,7 +210,7 @@ from compilation in `KbBreathe.csproj`, so it never ends up in KB Breathe and do
 
 ## Contributing
 
-Ideas, bug reports and pull requests are welcome. If a song feels wrong in Sound Sync-Vibe, open an issue with the song and what you expected to see. The tuning constants sit at the top of the `SoundSync` class. For screen sync, the frame rate (125 ms) is at the top of `StartSync`, and the sampling grid is `Columns` / `Rows` in `ScreenZones`.
+Ideas, bug reports and pull requests are welcome. If a song feels wrong in Sound Sync #1 (Vibe), open an issue with the song and what you expected to see. The tuning constants sit at the top of the `SoundSync` class. For screen sync, the frame rate (125 ms) is at the top of `StartSync`, and the sampling grid is `Columns` / `Rows` in `ScreenZones`.
 
 ## Disclaimer
 
