@@ -117,6 +117,8 @@ sealed class Settings
     public bool Tray = true, StartMin, Auto, ReactPower, ReactPlug, ReactUnplug;
     public int Speed = 550, SpeedTab = 2, Pattern = 0, Sens = 5;
     public string Custom = "0 1 2 3 4 3 2 1";
+    public string Color = "#FFFFFF";
+    public int Effect;
     public int[] HkMod = (int[])Hk.DefMod.Clone();
     public int[] HkKey = (int[])Hk.DefKey.Clone();
 
@@ -139,6 +141,8 @@ sealed class Settings
                 s.Pattern = Math.Max(0, Get(k, "Pattern", 0));
                 s.Sens = M.Clamp(Get(k, "Sens", 5), 1, 10);
                 s.Custom = k.GetValue("Custom") as string ?? s.Custom;
+                s.Color = k.GetValue("Color") as string ?? s.Color;
+                s.Effect = M.Clamp(Get(k, "Effect", 0), 0, ColorFx.Count - 1);
                 for (int i = 0; i < Hk.Count; i++)
                 {
                     s.HkMod[i] = Get(k, "Bind" + i + "Mod", Hk.DefMod[i]);
@@ -168,6 +172,8 @@ sealed class Settings
             k.SetValue("Pattern", Pattern, RegistryValueKind.DWord);
             k.SetValue("Sens", Sens, RegistryValueKind.DWord);
             k.SetValue("Custom", Custom, RegistryValueKind.String);
+            k.SetValue("Color", Color, RegistryValueKind.String);
+            k.SetValue("Effect", Effect, RegistryValueKind.DWord);
             for (int i = 0; i < Hk.Count; i++)
             {
                 k.SetValue("Bind" + i + "Mod", HkMod[i], RegistryValueKind.DWord);
@@ -439,16 +445,27 @@ sealed class IconButton : Ui
 // page tabs under the header: tracked caps, thin white underline on the active page
 sealed class NavBar : Ui
 {
-    private static readonly string[] Names = { "DASH", "KEYS", "REACT", "SETTINGS" };
+    private string[] _items = { "DASH", "KEYS", "REACT", "SETTINGS" };
     private int _sel;
     public event EventHandler? SelectedChanged;
+
+    public string[] Items
+    {
+        get => _items;
+        set
+        {
+            _items = value;
+            if (_sel >= _items.Length) _sel = Math.Max(0, _items.Length - 1);
+            Invalidate();
+        }
+    }
 
     public int Selected
     {
         get => _sel;
         set
         {
-            if (_sel == value) return;
+            if (value < 0 || value >= _items.Length || _sel == value) return;
             _sel = value;
             Invalidate();
             SelectedChanged?.Invoke(this, EventArgs.Empty);
@@ -460,11 +477,11 @@ sealed class NavBar : Ui
     protected override void Draw(Graphics g)
     {
         float x = 20;
-        for (int i = 0; i < Names.Length; i++)
+        for (int i = 0; i < _items.Length; i++)
         {
             bool on = i == _sel;
-            float w = CapsW(Names[i]);
-            CapsAt(g, Names[i], on ? Th.Text : Th.Muted, x, 0, LH - 1);
+            float w = CapsW(_items[i]);
+            CapsAt(g, _items[i], on ? Th.Text : Th.Muted, x, 0, LH - 1);
             if (on)
                 using (var b = new SolidBrush(Th.Text))
                     g.FillRectangle(b, x - 2, LH - 2, w + 4, 1.5f);
@@ -476,10 +493,10 @@ sealed class NavBar : Ui
 
     private float[] Starts()
     {
-        var s = new float[Names.Length + 1];
+        var s = new float[_items.Length + 1];
         float x = 20;
-        for (int i = 0; i < Names.Length; i++) { s[i] = x - 12; x += CapsW(Names[i]) + 28; }
-        s[Names.Length] = x;
+        for (int i = 0; i < _items.Length; i++) { s[i] = x - 12; x += CapsW(_items[i]) + 28; }
+        s[_items.Length] = x;
         return s;
     }
 
@@ -489,7 +506,7 @@ sealed class NavBar : Ui
         if (e.Button != MouseButtons.Left) return;
         float lx = e.X / S;
         var st = Starts();
-        for (int i = Names.Length - 1; i >= 0; i--)
+        for (int i = _items.Length - 1; i >= 0; i--)
             if (lx >= st[i]) { Selected = i; return; }
     }
 }
@@ -520,8 +537,8 @@ sealed class AboutCard : Ui
         Gfx.Box(g, new RectangleF(0.5f, 0.5f, LW - 1, LH - 1), Th.R, Th.Card, Th.Border);
         Gfx.Box(g, new RectangleF(16, 16, 40, 40), Th.R, Color.White, Color.White);
         Ico.Draw(g, Ico.Keyboard, IconFonts.Large, Color.Black, R(16, 16, 40, 40));
-        Gfx.Txt(g, "KB Breathe 6.0", Fonts.Title, Th.Text, R(70, 15, LW - 86, 22));
-        Gfx.Txt(g, "Light control for Acer Nitro.", Fonts.Small, Th.Muted, R(70, 37, LW - 86, 20));
+        Gfx.Txt(g, "KB Breathe 6.2", Fonts.Title, Th.Text, R(70, 15, LW - 86, 22));
+        Gfx.Txt(g, "Light control for Acer laptops.", Fonts.Small, Th.Muted, R(70, 37, LW - 86, 20));
     }
 }
 
@@ -924,6 +941,108 @@ sealed class LevelMeter : Ui
     }
 }
 
+// live view of the four zone colours
+sealed class ZonePreview : Ui
+{
+    private readonly RgbColor[] _colors = { RgbColor.White, RgbColor.White, RgbColor.White, RgbColor.White };
+
+    public ZonePreview() { OnCard = true; }
+
+    public void Set(IReadOnlyList<RgbColor> colors)
+    {
+        for (int i = 0; i < _colors.Length; i++)
+            _colors[i] = i < colors.Count ? colors[i] : RgbColor.White;
+        Invalidate();
+    }
+
+    protected override void Draw(Graphics g)
+    {
+        Gfx.Box(g, new RectangleF(0.5f, 0.5f, LW - 1, LH - 1), Th.R, Th.Card, Th.Border);
+
+        float gap = 6f, w = (LW - 24f - gap * 3) / 4f;
+        for (int i = 0; i < 4; i++)
+        {
+            var c = _colors[i];
+            var r = new RectangleF(12 + i * (w + gap), 10, w, LH - 20);
+            using var path = Gfx.Round(r, Th.R);
+            using (var brush = new SolidBrush(Color.FromArgb(c.R, c.G, c.B)))
+                g.FillPath(brush, path);
+            using var pen = new Pen(Th.Border, 1f);
+            g.DrawPath(pen, path);
+        }
+    }
+}
+
+// colour swatches, drawn only on models whose firmware takes RGB values
+sealed class ColorRow : Ui
+{
+    public static readonly RgbColor[] Swatches =
+    {
+        RgbColor.White,
+        new RgbColor(255, 64, 64),     // red
+        new RgbColor(255, 146, 48),    // orange
+        new RgbColor(255, 214, 64),    // amber
+        new RgbColor(84, 214, 120),    // green
+        new RgbColor(64, 220, 232),    // cyan
+        new RgbColor(72, 132, 255),    // blue
+        new RgbColor(154, 102, 255),   // violet
+        new RgbColor(255, 96, 208)     // pink
+    };
+
+    private int _sel;
+    public event EventHandler? SelectedChanged;
+
+    public ColorRow() { OnCard = true; Cursor = Cursors.Hand; }
+
+    public RgbColor Selection => Swatches[_sel];
+
+    public int Selected
+    {
+        get => _sel;
+        set
+        {
+            value = M.Clamp(value, 0, Swatches.Length - 1);
+            if (value == _sel) return;
+            _sel = value;
+            Invalidate();
+            SelectedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public void Select(RgbColor color)
+    {
+        int found = Array.IndexOf(Swatches, color);
+        if (found >= 0) Selected = found;
+    }
+
+    private float SwatchWidth => (LW - 8f * (Swatches.Length - 1)) / Swatches.Length;
+
+    protected override void Draw(Graphics g)
+    {
+        float w = SwatchWidth, size = Math.Min(w, LH), y = (LH - size) / 2f;
+        for (int i = 0; i < Swatches.Length; i++)
+        {
+            var c = Swatches[i];
+            var r = new RectangleF(i * (w + 8f) + (w - size) / 2f, y, size, size);
+            using (var path = Gfx.Round(r, 2f))
+            using (var brush = new SolidBrush(System.Drawing.Color.FromArgb(c.R, c.G, c.B)))
+                g.FillPath(brush, path);
+
+            if (i != _sel) continue;
+            using var ring = Gfx.Round(RectangleF.Inflate(r, 2.5f, 2.5f), 3f);
+            using var pen = new Pen(Th.Text, 1.5f);
+            g.DrawPath(pen, ring);
+        }
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left) return;
+        Selected = M.Clamp((int)(e.X / S / (SwatchWidth + 8f)), 0, Swatches.Length - 1);
+    }
+}
+
 sealed class RoundPanel : Panel
 {
     public RoundPanel()
@@ -967,7 +1086,7 @@ sealed class MenuColors : ProfessionalColorTable
 // ============================================================ main window (pops up bottom-right, above the tray)
 sealed class MainForm : Form
 {
-    private enum Backend { None, Ec, Wmi }
+    private enum Backend { None, Rgb, Ec, WmiAction, Wmi }
 
     private static readonly int[] LevelBrightness = { 0, 25, 50, 75, 100 };
 
@@ -997,6 +1116,20 @@ sealed class MainForm : Form
     // dash page
     private readonly StatList _stats;
     private readonly CapLabel _patCap, _speedCap;
+    // colour page
+    private readonly CapLabel _colorCap, _syncCap;
+    private readonly ColorRow _swatches;
+    private readonly ZonePreview _zones;
+    private readonly SettingRow _syncRow;
+    private readonly Label _syncHint;
+    private readonly CapLabel _effectCap;
+    private readonly SelectButton _effectSelect;
+    private readonly RoundPanel _effectCard;
+    private ContextMenuStrip? _effectMenu;
+    private int _effect;
+    private CancellationTokenSource? _fxCts;
+    private bool _fxRunning, _closing;
+    private readonly RoundPanel _colorCard, _syncCard;
     private readonly Label _patLabel, _speedLbl, _speedVal;
     private readonly RoundPanel _patCard, _inputBox, _speedCard;
     private readonly SelectButton _select;
@@ -1029,7 +1162,8 @@ sealed class MainForm : Form
     private ToolStripMenuItem? _trayToggle;
 
     private CancellationTokenSource? _cts;
-    private bool _running, _quit;
+    private CancellationTokenSource? _syncCts;
+    private bool _running, _quit, _syncRunning;
     private volatile bool _uiVisible;
     private volatile int _delay = 550;
     private volatile bool _sound;
@@ -1038,6 +1172,7 @@ sealed class MainForm : Form
     private volatile int[] _levels = { 1, 2, 3, 4 };   // read by the worker every step -> changes apply live
     private volatile int _ver;                          // bumped whenever the pattern changes
     private Backend _backend = Backend.None;
+    private bool _rgb;                       // the ENEK colour controller is present
     private int _pattern, _page;
     private string _customText;
     private bool _reacting;          // a reaction pulse owns the keys right now
@@ -1086,12 +1221,46 @@ sealed class MainForm : Form
         _closeBtn = new IconButton { Glyph = Ico.Close };
         _closeBtn.Click += (_, _) => HideOrExit();
         _nav = new NavBar();
-        _nav.SelectedChanged += (_, _) => SetPage(_nav.Selected);
+        _nav.SelectedChanged += (_, _) => SetPage(NavPage(_nav.Selected));
 
         // ---- dash page
         _stats = new StatList();
         _patCap = new CapLabel { Caption = "PATTERN" };
         _speedCap = new CapLabel { Caption = "SPEED" };
+
+        // The colour page only exists on models whose keyboard has the ENEK controller. Like
+        // Nitrous, the tab is dropped entirely when the firmware has none.
+        _colorCap = new CapLabel { Caption = "KEYBOARD COLOUR" };
+        _colorCard = new RoundPanel { BackColor = Th.Bg };
+        _swatches = new ColorRow();
+        _swatches.Select(RgbColor.FromHex(_s.Color));
+        RgbKeyboard.Color = _swatches.Selection;
+        _swatches.SelectedChanged += (_, _) =>
+        {
+            _s.Color = _swatches.Selection.ToHex();
+            _s.Save();
+            RgbKeyboard.Color = _swatches.Selection;
+            if (_syncRunning) return;   // screen sync owns the LEDs right now
+            ApplyEffect();              // show the choice right away, in whichever effect is selected
+        };
+        _colorCard.Controls.Add(_swatches);
+
+        _syncCap = new CapLabel { Caption = "SCREEN COLOUR SYNC" };
+        _syncCard = new RoundPanel { BackColor = Th.Bg };
+        _syncRow = new SettingRow { Glyph = Ico.Play, Caption = "Follow the screen colours" };
+        _syncRow.CheckedChanged += (_, _) => { if (_syncRow.Checked) StartSync(); else StopSync(); };
+        _syncCard.Controls.Add(_syncRow);
+        _zones = new ZonePreview();
+        _syncHint = Lbl("Each zone takes the colour of one quarter of the screen and follows it eight times a second. Start hands the keys back to the patterns.",
+            Fonts.Small, Th.Dim, Th.Bg, ContentAlignment.MiddleLeft);
+
+        _effectCap = new CapLabel { Caption = "KEYBOARD EFFECT" };
+        _effectCard = new RoundPanel { BackColor = Th.Bg };
+        _effect = M.Clamp(s.Effect, 0, ColorFx.Count - 1);
+        _effectSelect = new SelectButton { Caption = ColorFx.Names[_effect] };
+        _effectSelect.Click += (_, _) => ShowEffectMenu();
+        _effectCard.Controls.Add(_effectSelect);
+        ShowZones(_swatches.Selection);
 
         _patCard = new RoundPanel { BackColor = Th.Bg };
         _patLabel = Lbl("Pattern", Fonts.Body, Th.Text, Th.Card, ContentAlignment.MiddleLeft);
@@ -1193,6 +1362,7 @@ sealed class MainForm : Form
         // earlier in the list = higher in z-order (close button must sit above the header)
         Controls.AddRange(new Control[] { _closeBtn, _header, _nav,
             _stats, _patCap, _patCard, _speedCap, _tabs, _preview, _speedCard, _go,
+            _colorCap, _colorCard, _syncCap, _syncCard, _zones, _syncHint,
             _keysCap, _resetKeys, _keysCard, _keysNote,
             _about, _startCap, _card,
             _reactCap, _reactCard, _reactNote });
@@ -1210,6 +1380,7 @@ sealed class MainForm : Form
         VisibleChanged += (_, _) => UpdateVisibility();
         FormClosing += OnClosing;
 
+        SetupNav();
         RebuildMenus();
         SetPattern(_pattern);
         UpdateHint();
@@ -1305,8 +1476,12 @@ sealed class MainForm : Form
             Hide();
             return;
         }
+        _closing = true;
         StopBreathing();
+        StopSync();
+        StopFx();
         EcHid.Release();
+        RgbKeyboard.Release();
         UnregisterHotkeys();
         _notify.Visible = false;
         _notify.Dispose();
@@ -1396,6 +1571,37 @@ sealed class MainForm : Form
     }
 
     // ---- pages + layout (all numbers are 96-dpi units, scaled once here; window size is fixed)
+    private const int PageDash = 0, PageColor = 1, PageKeys = 2, PageReact = 3, PageSettings = 4;
+
+    private int[] _navPages = { PageDash, PageKeys, PageReact, PageSettings };
+
+    private int NavPage(int navIndex) =>
+        navIndex >= 0 && navIndex < _navPages.Length ? _navPages[navIndex] : PageDash;
+
+    // The COLOR tab exists only when the keyboard has the colour controller, so a model without it
+    // keeps the original DASH | KEYS | REACT | SETTINGS strip instead of a dead tab.
+    private void SetupNav()
+    {
+        if (_rgb)
+        {
+            _nav.Items = new[] { "DASH", "COLOR", "KEYS", "REACT", "SETTINGS" };
+            _navPages = new[] { PageDash, PageColor, PageKeys, PageReact, PageSettings };
+        }
+        else
+        {
+            _nav.Items = new[] { "DASH", "KEYS", "REACT", "SETTINGS" };
+            _navPages = new[] { PageDash, PageKeys, PageReact, PageSettings };
+        }
+
+        for (int i = 0; i < _navPages.Length; i++)
+            if (_navPages[i] == _page) { _nav.Selected = i; _nav.Invalidate(); return; }
+
+        // The page disappeared with the controller: land on the dashboard rather than on a tab
+        // that no longer describes what is showing.
+        _nav.Selected = 0;
+        SetPage(PageDash);
+    }
+
     private void SetPage(int p)
     {
         _page = p;
@@ -1408,7 +1614,8 @@ sealed class MainForm : Form
         int D(float v) => (int)Math.Round(v * k);
 
         const int W = 420, H = 510, M0 = 20, CW = 380, HeadH = 48, NavH = 36, Top = HeadH + NavH + 16;
-        bool custom = IsCustom, sound = IsSound, dash = _page == 0, keys = _page == 1, react = _page == 2, sett = _page == 3;
+        bool custom = IsCustom, sound = IsSound, dash = _page == PageDash, color = _page == PageColor,
+             keys = _page == PageKeys, react = _page == PageReact, sett = _page == PageSettings;
 
         _header.SetBounds(0, 0, D(W), D(HeadH));
         _closeBtn.SetBounds(D(W - 20 - 28), D(10), D(28), D(28));
@@ -1465,6 +1672,35 @@ sealed class MainForm : Form
             _preview.SetBounds(D(M0), D(y), D(CW), D(76));
         }
         _go.SetBounds(D(M0), D(H - 20 - 44), D(CW), D(44));
+
+        // ---- colour
+        _colorCap.Visible = _colorCard.Visible = _effectCap.Visible = _effectCard.Visible =
+            _syncCap.Visible = _syncCard.Visible = _zones.Visible = _syncHint.Visible = color;
+        y = Top;
+        if (color)
+        {
+            _colorCap.SetBounds(D(M0), D(y), D(240), D(16));
+            y += 20;
+            _colorCard.SetBounds(D(M0), D(y), D(CW), D(52));
+            _swatches.SetBounds(D(8), D(8), D(CW - 16), D(36));
+            y += 52 + 18;
+
+            _effectCap.SetBounds(D(M0), D(y), D(240), D(16));
+            y += 20;
+            _effectCard.SetBounds(D(M0), D(y), D(CW), D(48));
+            _effectSelect.SetBounds(D(8), D(6), D(CW - 16), D(36));
+            y += 48 + 18;
+
+            _syncCap.SetBounds(D(M0), D(y), D(240), D(16));
+            y += 20;
+            _syncCard.SetBounds(D(M0), D(y), D(CW), D(48));
+            _syncRow.SetBounds(D(1), D(1), D(CW - 2), D(46));
+            y += 48 + 16;
+
+            _zones.SetBounds(D(M0), D(y), D(CW), D(56));
+            y += 56 + 8;
+            _syncHint.SetBounds(D(M0), D(y), D(CW), D(38));
+        }
 
         // ---- keys
         _keysCap.Visible = _resetKeys.Visible = _keysCard.Visible = _keysNote.Visible = keys;
@@ -1605,17 +1841,36 @@ sealed class MainForm : Form
     }
 
     // ---- backend
+    // The order Nitrous probes in: the colour controller first (it drives brightness too), then the
+    // Acer EC HID, then the two WMI backlight paths the WMI-only models use.
     private static Backend Probe()
     {
+        if (RgbKeyboard.IsAvailable()) return Backend.Rgb;
         if (EcHid.IsAvailable()) return Backend.Ec;
+        if (AcerWmiKeyboard.IsAvailable()) return Backend.WmiAction;
         return WmiBacklight.IsAvailable() ? Backend.Wmi : Backend.None;
+    }
+
+    // Every write in the app goes through here, so a backend that can carry colour and one that can
+    // only dim are interchangeable to the pattern and sound workers.
+    private static bool Apply(Backend backend, int pct)
+    {
+        switch (backend)
+        {
+            case Backend.Rgb: return RgbKeyboard.SetBrightness(pct);
+            case Backend.Ec: return EcHid.SetBrightness(pct);
+            case Backend.WmiAction: return AcerWmiKeyboard.SetBrightness(pct);
+            default: return WmiBacklight.SetBrightness(pct);
+        }
     }
 
     private void ShowBackend()
     {
         switch (_backend)
         {
+            case Backend.Rgb: _stats.SetBackend("RGB", true); break;
             case Backend.Ec: _stats.SetBackend("EC", true); break;
+            case Backend.WmiAction: _stats.SetBackend("WMI KB", true); break;
             case Backend.Wmi: _stats.SetBackend("WMI", true); break;
             default: _stats.SetBackend("—", false); break;
         }
@@ -1632,8 +1887,21 @@ sealed class MainForm : Form
     {
         Task.Run(() =>
         {
+            bool rgb = RgbKeyboard.IsAvailable();
             var b = Probe();
-            Post(() => { if (!_running) { _backend = b; ShowBackend(); } });
+            Post(() =>
+            {
+                bool changed = rgb != _rgb;
+                _rgb = rgb;
+                if (_rgb && _effect != ColorFx.Static) ApplyEffect();   // bring the saved effect back
+                if (!_running) { _backend = b; ShowBackend(); }
+                if (!_rgb) { StopFx(); if (_syncRunning) StopSync(); }
+                if (changed)
+                {
+                    SetupNav();
+                    LayoutUi();
+                }
+            });
         });
     }
 
@@ -1753,8 +2021,7 @@ sealed class MainForm : Form
 
     private static void Flash(Backend backend, int lvl)
     {
-        int pct = LevelBrightness[M.Clamp(lvl, 0, 4)];
-        if (backend == Backend.Ec) EcHid.SetBrightness(pct); else WmiBacklight.SetBrightness(pct);
+        Apply(backend, LevelBrightness[M.Clamp(lvl, 0, 4)]);
     }
 
     // "Apply selected mode on startup": turn the saved pattern on as soon as the app is up
@@ -1772,6 +2039,7 @@ sealed class MainForm : Form
 
     private void StartBreathing()
     {
+        if (_syncRunning) StopSync();   // one owner of the LEDs at a time
         _backend = Probe();
         ShowBackend();
         if (_backend == Backend.None)
@@ -1807,7 +2075,7 @@ sealed class MainForm : Form
                         while (_reacting && !token.IsCancellationRequested)   // a reaction pulse owns the keys
                             await Task.Delay(10, token).ConfigureAwait(false);
                         int pct = LevelBrightness[M.Clamp(lvl, 0, 4)];
-                        bool ok = backend == Backend.Ec ? EcHid.SetBrightness(pct) : WmiBacklight.SetBrightness(pct);
+                        bool ok = Apply(backend, pct);
                         if (_uiVisible)
                             Post(() =>
                             {
@@ -1839,6 +2107,7 @@ sealed class MainForm : Form
             finally
             {
                 if (backend == Backend.Ec) EcHid.Release();
+                if (backend == Backend.Rgb) RgbKeyboard.Release();
             }
         });
     }
@@ -1859,7 +2128,7 @@ sealed class MainForm : Form
             {
                 last = lvl;
                 int pct = LevelBrightness[M.Clamp(lvl, 0, 4)];
-                bool ok = backend == Backend.Ec ? EcHid.SetBrightness(pct) : WmiBacklight.SetBrightness(pct);
+                bool ok = Apply(backend, pct);
                 if (_uiVisible)
                     Post(() =>
                     {
@@ -1877,6 +2146,164 @@ sealed class MainForm : Form
         if (_cts != null) { _cts.Cancel(); _cts.Dispose(); _cts = null; }
         _running = false;
         if (!IsDisposed) SetRunningUi(false);
+        if (_rgb && !_syncRunning) ApplyEffect();   // hand the keys back to the chosen effect
+    }
+
+    // ---- screen colour sync (the colour page)
+    private void ShowZones(RgbColor c) => _zones.Set(new[] { c, c, c, c });
+
+    // ---- keyboard effects (the colour page)
+    private void ShowEffectMenu()
+    {
+        if (_effectMenu == null)
+        {
+            _effectMenu = MakeMenu();
+            for (int i = 0; i < ColorFx.Count; i++)
+            {
+                int idx = i;
+                var item = new ToolStripMenuItem(ColorFx.Names[i]) { Padding = new Padding(2, 5, 2, 5) };
+                item.Click += (_, _) => SelectEffect(idx);
+                _effectMenu.Items.Add(item);
+            }
+        }
+
+        for (int i = 0; i < _effectMenu.Items.Count; i++)
+            if (_effectMenu.Items[i] is ToolStripMenuItem mi) mi.Checked = i == _effect;
+        _effectMenu.MinimumSize = new Size(_effectSelect.Width, 0);
+        _effectMenu.Show(_effectSelect, new Point(0, _effectSelect.Height + 4));
+    }
+
+    private void SelectEffect(int index)
+    {
+        _effect = M.Clamp(index, 0, ColorFx.Count - 1);
+        _effectSelect.Caption = ColorFx.Names[_effect];
+        _s.Effect = _effect;
+        _s.Save();
+
+        // The effect and the patterns both write the same LEDs, so one has to stop.
+        if (_running) { StopBreathing(); return; }   // StopBreathing applies the new effect
+        // Screen sync owns the LEDs while it runs; picking an effect takes them back.
+        if (_syncRunning) { StopSync(); return; }
+        ApplyEffect();
+    }
+
+    private void ApplyEffect()
+    {
+        if (!_rgb || _closing || IsDisposed) return;
+        StopFx();
+
+        if (_effect == ColorFx.Static)
+        {
+            RgbKeyboard.SetBrightness(LevelBrightness[4]);
+            ShowZones(_swatches.Selection);
+            return;
+        }
+
+        if (ColorFx.IsFlow(_effect)) { StartFx(); return; }
+
+        // The firmware animates these itself, so one packet keeps running after we let go.
+        RgbKeyboard.SetEffect(ColorFx.EffectByte(_effect), _swatches.Selection, 4);
+        ShowZones(_swatches.Selection);
+    }
+
+    private void StartFx()
+    {
+        if (!_rgb || _closing || _fxRunning) return;
+        _fxRunning = true;
+        _fxCts = new CancellationTokenSource();
+        var token = _fxCts.Token;
+        var clock = Stopwatch.StartNew();
+        var zones = new RgbColor[4];
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    // patterns, reactions and screen sync own the LEDs while they run
+                    if (_running || _reacting || _syncRunning)
+                    {
+                        await Task.Delay(50, token).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    ColorFx.Flow(_effect, clock.Elapsed.TotalSeconds, zones);
+                    RgbKeyboard.SetZones(zones, LevelBrightness[4]);
+
+                    if (_uiVisible)
+                    {
+                        var shown = (RgbColor[])zones.Clone();
+                        Post(() => { if (_fxRunning) _zones.Set(shown); });
+                    }
+
+                    // full rate while the page is on screen, a third of it in the tray
+                    await Task.Delay(_uiVisible ? 40 : 120, token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }   // the token can go away mid-wait
+        });
+    }
+
+    private void StopFx()
+    {
+        if (_fxCts != null) { _fxCts.Cancel(); _fxCts.Dispose(); _fxCts = null; }
+        _fxRunning = false;
+    }
+
+    private void StartSync()
+    {
+        if (_syncRunning) return;
+
+        _backend = Probe();
+        ShowBackend();
+        if (_backend != Backend.Rgb)
+        {
+            _syncRow.Checked = false;
+            MessageBox.Show("Screen colour sync needs the keyboard's RGB controller (close NitroSense first).",
+                "Not supported", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        StopBreathing();
+        StopFx();
+        _syncRunning = true;
+        _syncCts = new CancellationTokenSource();
+        var token = _syncCts.Token;
+
+        Task.Run(async () =>
+        {
+            using var screen = new ScreenZones();
+            var zones = new RgbColor[4];
+
+            while (!token.IsCancellationRequested)
+            {
+                if (!_reacting && screen.TryCapture(out var pixels))
+                {
+                    ScreenZones.ReadZones(pixels, zones);
+                    RgbKeyboard.SetZones(zones, LevelBrightness[4]);
+
+                    if (_uiVisible)
+                    {
+                        var shown = (RgbColor[])zones.Clone();
+                        Post(() => { if (_syncRunning) _zones.Set(shown); });
+                    }
+                }
+
+                try { await Task.Delay(125, token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+            }
+        });
+    }
+
+    private void StopSync()
+    {
+        if (_syncCts == null && !_syncRunning) return;
+        if (_syncCts != null) { _syncCts.Cancel(); _syncCts.Dispose(); _syncCts = null; }
+        _syncRunning = false;
+        _syncRow.Checked = false;
+        ApplyEffect();   // back to the chosen colour and effect
     }
 
     private void SetRunningUi(bool on)
@@ -2496,13 +2923,13 @@ static class EcHid
         public Reply(ushort status, ushort command) { Status = status; Command = command; }
     }
 
-    private readonly struct DeviceInfo
+    internal readonly struct DeviceInfo
     {
         public readonly ushort VendorId, ProductId, UsagePage, Usage;
         public DeviceInfo(ushort v, ushort p, ushort up, ushort u) { VendorId = v; ProductId = p; UsagePage = up; Usage = u; }
     }
 
-    private static class HidInterop
+    internal static class HidInterop
     {
         public static IReadOnlyList<string> Paths()
         {
@@ -2550,6 +2977,527 @@ static class EcHid
         [DllImport("hid.dll")] private static extern int HidP_GetCaps(IntPtr data, ref HidCaps caps);
         [DllImport("hid.dll")] private static extern bool HidD_SetFeature(SafeFileHandle handle, byte[] buffer, int length);
         [DllImport("hid.dll")] private static extern bool HidD_GetFeature(SafeFileHandle handle, byte[] buffer, int length);
+    }
+}
+
+// ============================================================ ENEK colour controller (vid 0x0CF2 / pid 0x5130)
+// Protocol ported from Nitrous' AcerKeyboard (which took it from OpenRGB's
+// AcerNitroHidKeyboardController) and trimmed to what KB Breathe needs: one colour across all zones,
+// stepped by the same 0-4 brightness levels the patterns and Sound Sync already produce.
+readonly struct RgbColor
+{
+    public readonly byte R, G, B;
+
+    public RgbColor(byte r, byte g, byte b) { R = r; G = g; B = b; }
+
+    public static RgbColor White => new RgbColor(255, 255, 255);
+
+    public string ToHex() => "#" + R.ToString("X2") + G.ToString("X2") + B.ToString("X2");
+
+    public static RgbColor FromHex(string? hex)
+    {
+        var s = (hex ?? "").TrimStart('#');
+        uint rgb;
+        return s.Length == 6 && uint.TryParse(s, System.Globalization.NumberStyles.AllowHexSpecifier,
+            System.Globalization.CultureInfo.InvariantCulture, out rgb)
+            ? new RgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb)
+            : White;
+    }
+}
+
+// The colour page's effect list: the controller's own effects first, then two software flows.
+// Hardware effects keep animating after a single packet; the flows are drawn here because the
+// firmware has no full-spectrum mode of its own on every model.
+static class ColorFx
+{
+    public const int Static = 0;
+
+    public static readonly string[] Names =
+    {
+        "Static",
+        "Breathing",
+        "Neon",
+        "Wave",
+        "Ripple",
+        "Zoom",
+        "Snake",
+        "Disco",
+        "Rainbow flow",
+        "Rainbow wave"
+    };
+
+    public static int Count => Names.Length;
+
+    /// <summary>True for the modes this app animates zone by zone rather than the firmware.</summary>
+    public static bool IsFlow(int mode) => mode >= 8;
+
+    public static byte EffectByte(int mode) => mode switch
+    {
+        1 => RgbKeyboard.EffectBreathing,
+        2 => RgbKeyboard.EffectNeon,
+        3 => RgbKeyboard.EffectWave,
+        4 => RgbKeyboard.EffectRipple,
+        5 => RgbKeyboard.EffectZoom,
+        6 => RgbKeyboard.EffectSnake,
+        7 => RgbKeyboard.EffectDisco,
+        _ => RgbKeyboard.EffectStatic
+    };
+
+    /// <summary>Four zone colours for a software flow; <paramref name="seconds"/> keeps it moving.</summary>
+    public static void Flow(int mode, double seconds, RgbColor[] zones)
+    {
+        for (int i = 0; i < zones.Length; i++)
+        {
+            if (mode == 8)
+            {
+                // Rainbow flow: the spectrum scrolls left to right across the zones.
+                zones[i] = Hsv(seconds * 55 + i * 42, 1, 1);
+            }
+            else
+            {
+                // Rainbow wave: the spectrum stands still and a brightness wave runs through it,
+                // which reads as a vertical wipe on the four horizontal zones.
+                double wave = 0.5 + 0.5 * Math.Sin(seconds * 3.4 - i * 1.4);
+                zones[i] = Hsv(i * 68, 1, 0.6 + 0.4 * wave);
+            }
+        }
+    }
+
+    private static RgbColor Hsv(double hue, double saturation, double value)
+    {
+        hue = ((hue % 360) + 360) % 360;
+        double c = value * saturation;
+        double x = c * (1 - Math.Abs(hue / 60 % 2 - 1));
+        double m = value - c;
+        double r = 0, g = 0, b = 0;
+
+        if (hue < 60) { r = c; g = x; }
+        else if (hue < 120) { r = x; g = c; }
+        else if (hue < 180) { g = c; b = x; }
+        else if (hue < 240) { g = x; b = c; }
+        else if (hue < 300) { r = x; b = c; }
+        else { r = c; b = x; }
+
+        return new RgbColor(
+            (byte)Math.Round((r + m) * 255),
+            (byte)Math.Round((g + m) * 255),
+            (byte)Math.Round((b + m) * 255));
+    }
+}
+
+static class RgbKeyboard
+{
+    private const ushort VendorId = 0x0CF2, ProductId = 0x5130, UsagePage = 0xFF5A, Usage = 0x0001;
+    private const byte ReportId = 0xA4, KeyboardDevice = 0x21, AllZones = 0x0F;
+    public const byte EffectStatic = 2;    // Static: one colour, brightness per packet
+    // The firmware's own effects, in the controller's encoding (Nitrous / OpenRGB).
+    public const byte EffectBreathing = 4, EffectNeon = 5, EffectWave = 7, EffectRipple = 8,
+                        EffectZoom = 9, EffectSnake = 10, EffectDisco = 11;
+    private const int ZoneCount = 4;
+    private const int ReportLength = 11;
+
+    private static readonly object Gate = new object();
+    private static bool? _available;
+    private static Device? _dev;
+    private static volatile int _color = 0xFFFFFF;
+
+    /// <summary>The colour the patterns light up in. Written while running, so edits apply live.</summary>
+    public static RgbColor Color
+    {
+        get { int v = _color; return new RgbColor((byte)(v >> 16), (byte)(v >> 8), (byte)v); }
+        set { _color = (value.R << 16) | (value.G << 8) | value.B; }
+    }
+
+    /// <summary>True when this machine exposes the keyboard's colour controller.</summary>
+    public static bool IsAvailable()
+    {
+        lock (Gate)
+        {
+            if (!_available.HasValue)
+            {
+                using var probe = Open();
+                _available = probe != null;
+            }
+            return _available.Value;
+        }
+    }
+
+    public static bool SetBrightness(int percent)
+    {
+        lock (Gate)
+        {
+            for (int pass = 0; pass < 2; pass++)
+            {
+                if (_dev == null) _dev = Open();
+                if (_dev == null) return false;
+                if (Write(_dev, M.Clamp(percent, 0, 100))) return true;
+                _dev.Dispose();
+                _dev = null;
+            }
+            return false;
+        }
+    }
+
+    public static void Release()
+    {
+        lock (Gate)
+        {
+            if (_dev != null) { _dev.Dispose(); _dev = null; }
+        }
+    }
+
+    /// <summary>One colour per zone, for screen sync.</summary>
+    public static bool SetZones(IReadOnlyList<RgbColor> colors, int brightness)
+    {
+        lock (Gate)
+        {
+            for (int pass = 0; pass < 2; pass++)
+            {
+                if (_dev == null) _dev = Open();
+                if (_dev == null) return false;
+                if (WriteZones(_dev, colors, brightness)) return true;
+                _dev.Dispose();
+                _dev = null;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>One of the firmware's effects, across all four zones; the controller animates it from here on.</summary>
+    public static bool SetEffect(byte effect, RgbColor color, int speed)
+    {
+        lock (Gate)
+        {
+            for (int pass = 0; pass < 2; pass++)
+            {
+                if (_dev == null) _dev = Open();
+                if (_dev == null) return false;
+                if (WriteEffect(_dev, effect, color, speed)) return true;
+                _dev.Dispose();
+                _dev = null;
+            }
+            return false;
+        }
+    }
+
+    private static bool WriteEffect(Device device, byte effect, RgbColor color, int speed)
+    {
+        var packet = new byte[ReportLength];
+        packet[0] = ReportId;
+        packet[1] = KeyboardDevice;
+        packet[2] = effect;
+        packet[3] = 100;
+        packet[4] = (byte)M.Clamp(speed, 1, 9);
+        packet[5] = 1;              // direction: right
+        packet[6] = color.R;
+        packet[7] = color.G;
+        packet[8] = color.B;
+        packet[9] = AllZones;
+        packet[10] = 0;
+        return device.Set(packet);
+    }
+
+    private static bool WriteZones(Device device, IReadOnlyList<RgbColor> colors, int brightness)
+    {
+        var sent = false;
+        for (int zone = 0; zone < ZoneCount; zone++)
+        {
+            var color = zone < colors.Count ? colors[zone] : RgbColor.White;
+            var packet = new byte[ReportLength];
+            packet[0] = ReportId;
+            packet[1] = KeyboardDevice;
+            packet[2] = EffectStatic;
+            packet[3] = (byte)M.Clamp(brightness, 0, 100);
+            packet[4] = 0;
+            packet[5] = 1;
+            packet[6] = color.R;
+            packet[7] = color.G;
+            packet[8] = color.B;
+            packet[9] = (byte)(1 << zone);
+            packet[10] = 0;
+            sent |= device.Set(packet);
+        }
+        return sent;
+    }
+
+    private static bool Write(Device device, int percent)
+    {
+        var color = Color;
+        var packet = new byte[ReportLength];
+        packet[0] = ReportId;
+        packet[1] = KeyboardDevice;
+        packet[2] = EffectStatic;
+        packet[3] = (byte)percent;
+        packet[4] = 0;      // speed: unused by Static
+        packet[5] = 1;      // direction: right
+        packet[6] = color.R;
+        packet[7] = color.G;
+        packet[8] = color.B;
+        packet[9] = AllZones;
+        packet[10] = 0;
+        return device.Set(packet);
+    }
+
+    private static Device? Open()
+    {
+        try
+        {
+            foreach (var path in EcHid.HidInterop.Paths())
+            {
+                var handle = EcHid.HidInterop.CreateFileW(path, 0xC0000000u, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+                if (handle.IsInvalid) { handle.Dispose(); continue; }
+                var info = EcHid.HidInterop.Describe(handle);
+                if (!info.HasValue ||
+                    info.Value.VendorId != VendorId || info.Value.ProductId != ProductId ||
+                    info.Value.UsagePage != UsagePage || info.Value.Usage != Usage)
+                { handle.Dispose(); continue; }
+                return new Device(handle);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private sealed class Device : IDisposable
+    {
+        private readonly SafeFileHandle _handle;
+        public Device(SafeFileHandle handle) { _handle = handle; }
+        public bool Set(byte[] packet) => EcHid.HidInterop.SetFeature(_handle, packet);
+        public void Dispose() => _handle.Dispose();
+    }
+}
+
+// ============================================================ screen colours for the four zones
+// Ported from Nitrous' ScreenCapture: StretchBlt scales the desktop straight into a 64x36 DIB, so a
+// 1080p screen is not copied and then shrunk every frame.
+sealed class ScreenZones : IDisposable
+{
+    public const int ZoneCount = 4;
+    private const int Columns = 64, Rows = 36;
+    private const uint Srccopy = 0x00CC0020, CaptureBlt = 0x40000000;
+
+    private IntPtr _memoryDc, _bitmap, _previous, _bits;
+    private readonly byte[] _pixels = new byte[Columns * Rows * 4];
+
+    public ScreenZones()
+    {
+        var screen = GetDC(IntPtr.Zero);
+        if (screen == IntPtr.Zero) return;
+        try
+        {
+            _memoryDc = CreateCompatibleDC(screen);
+            if (_memoryDc == IntPtr.Zero) return;
+
+            var info = new BitmapInfo();
+            info.Header.Size = (uint)Marshal.SizeOf(typeof(BitmapInfoHeader));
+            info.Header.Width = Columns;
+            info.Header.Height = -Rows;   // top-down, so row 0 is the top of the screen
+            info.Header.Planes = 1;
+            info.Header.BitCount = 32;
+
+            _bitmap = CreateDIBSection(screen, ref info, 0, out _bits, IntPtr.Zero, 0);
+            if (_bitmap != IntPtr.Zero) _previous = SelectObject(_memoryDc, _bitmap);
+        }
+        finally { ReleaseDC(IntPtr.Zero, screen); }
+    }
+
+    public bool TryCapture(out byte[] pixels)
+    {
+        pixels = _pixels;
+        if (_memoryDc == IntPtr.Zero || _bitmap == IntPtr.Zero) return false;
+
+        var screen = GetDC(IntPtr.Zero);
+        if (screen == IntPtr.Zero) return false;
+        try
+        {
+            var bounds = Screen.PrimaryScreen.Bounds;
+
+            // CAPTUREBLT keeps overlay windows in the capture; a driver that refuses it gets the
+            // plain copy instead of a sync that silently never moves.
+            if (!StretchBlt(_memoryDc, 0, 0, Columns, Rows, screen,
+                    bounds.X, bounds.Y, bounds.Width, bounds.Height, Srccopy | CaptureBlt) &&
+                !StretchBlt(_memoryDc, 0, 0, Columns, Rows, screen,
+                    bounds.X, bounds.Y, bounds.Width, bounds.Height, Srccopy))
+                return false;
+        }
+        finally { ReleaseDC(IntPtr.Zero, screen); }
+
+        Marshal.Copy(_bits, _pixels, 0, _pixels.Length);
+        return true;
+    }
+
+    /// <summary>Four equal screen columns, left to right, as zone colours.</summary>
+    public static void ReadZones(byte[] bgra, RgbColor[] zones)
+    {
+        int zoneWidth = Columns / ZoneCount;
+        for (int zone = 0; zone < ZoneCount && zone < zones.Length; zone++)
+        {
+            long red = 0, green = 0, blue = 0;
+
+            for (int y = 0; y < Rows; y++)
+            {
+                int row = y * Columns * 4;
+                for (int x = zone * zoneWidth; x < (zone + 1) * zoneWidth; x++)
+                {
+                    int i = row + x * 4;
+                    blue += bgra[i];
+                    green += bgra[i + 1];
+                    red += bgra[i + 2];
+                }
+            }
+
+            int count = Rows * zoneWidth;
+            zones[zone] = new RgbColor((byte)(red / count), (byte)(green / count), (byte)(blue / count));
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_memoryDc != IntPtr.Zero && _previous != IntPtr.Zero) SelectObject(_memoryDc, _previous);
+        if (_bitmap != IntPtr.Zero) DeleteObject(_bitmap);
+        if (_memoryDc != IntPtr.Zero) DeleteDC(_memoryDc);
+        _memoryDc = _bitmap = _previous = _bits = IntPtr.Zero;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfoHeader
+    {
+        public uint Size;
+        public int Width, Height;
+        public ushort Planes, BitCount;
+        public uint Compression, SizeImage;
+        public int XPelsPerMeter, YPelsPerMeter;
+        public uint ClrUsed, ClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        public BitmapInfoHeader Header;
+        public uint Colors;
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateDIBSection(
+        IntPtr hdc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool StretchBlt(
+        IntPtr dest, int x, int y, int width, int height,
+        IntPtr source, int sourceX, int sourceY, int sourceWidth, int sourceHeight, uint rop);
+}
+
+// ============================================================ WMI-only models (ANV15-41 and similar)
+// Nitrous' second brightness path: some models expose no Acer EC HID interface and no
+// Acer_Gaming backlight method, and keep their backlight in APGeAction. GetFunction/SetFunction are
+// addressed with the keyboard hotkey Acer's own agent stores in the registry.
+static class AcerWmiKeyboard
+{
+    private const string Scope = @"root\WMI", ActionClass = "APGeAction";
+    private const ulong Flags = 0x00080002;
+    private const uint Address = 0x80001;
+    private static readonly int[] Levels = { 0, 25, 50, 75, 100 };
+    private static bool? _available;
+
+    public static bool IsAvailable()
+    {
+        if (_available.HasValue) return _available.Value;
+
+        var read = Read();
+
+        // A real answer either echoes the hotkey or carries one of the firmware's brightness steps.
+        // An unimplemented function answers a constant (0xE1 on some BIOSes), which satisfies neither.
+        _available = read.HasValue && (read.Value.Echo || read.Value.Brightness != 0);
+        return _available.Value;
+    }
+
+    public static bool SetBrightness(int percent)
+    {
+        var level = Nearest(percent);
+        var timeout = Read()?.TimeoutSeconds ?? 0;
+        timeout = M.Clamp(timeout, 0, 0xFF);
+
+        var value = ((ulong)level << 32) | ((ulong)Hotkey() << 8) | ((ulong)timeout << 40) | Flags;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(Scope, "SELECT * FROM " + ActionClass);
+            foreach (ManagementObject instance in searcher.Get())
+            {
+                using (instance)
+                {
+                    using var inParams = instance.GetMethodParameters("SetFunction");
+                    inParams["uiInput"] = value;
+                    using var outParams = instance.InvokeMethod("SetFunction", inParams, null);
+                    return outParams != null;
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static int Nearest(int percent)
+    {
+        int best = 0;
+        foreach (var level in Levels)
+            if (Math.Abs(level - percent) < Math.Abs(best - percent)) best = level;
+        return best;
+    }
+
+    private static Probed? Read()
+    {
+        var hotkey = Hotkey();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(Scope, "SELECT * FROM " + ActionClass);
+            foreach (ManagementObject instance in searcher.Get())
+            {
+                using (instance)
+                {
+                    using var inParams = instance.GetMethodParameters("GetFunction");
+                    inParams["uiInput"] = (uint)((hotkey << 8) | Address);
+                    using var outParams = instance.InvokeMethod("GetFunction", inParams, null);
+
+                    var raw = outParams?.Properties["uiOutput"]?.Value;
+                    if (raw == null) return null;
+
+                    var value = Convert.ToUInt64(raw);
+                    return new Probed(
+                        (int)((value >> 32) & 0xFF), (int)((value >> 40) & 0xFF),
+                        ((value >> 8) & 0xFF) == (ulong)hotkey);
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static int Hotkey()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\OEM\AcerAgentService");
+            if (key?.GetValue("BK_Hotkey_Number") is int value && value > 0 && value <= 0xFF) return value;
+        }
+        catch { }
+        return 132;   // what both machines Nitrous measured report
+    }
+
+    private readonly struct Probed
+    {
+        public readonly int Brightness, TimeoutSeconds;
+        public readonly bool Echo;
+        public Probed(int brightness, int timeoutSeconds, bool echo)
+        {
+            Brightness = brightness; TimeoutSeconds = timeoutSeconds; Echo = echo;
+        }
     }
 }
 

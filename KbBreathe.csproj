@@ -10,7 +10,7 @@
     <AssemblyName>KbBreathe</AssemblyName>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <Product>KB Breathe</Product>
-    <Version>6.1.1</Version>
+    <Version>6.2</Version>
     <Optimize>true</Optimize>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -19,5 +19,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Management" />
+    <!-- Nitrous' source is kept here as reference only; it is a separate WPF/.NET 10 app. -->
+    <Compile Remove="nitrous-master\**" />
   </ItemGroup>
 </Project>

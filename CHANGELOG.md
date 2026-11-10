@@ -1,10 +1,58 @@
 # Changelog
 
-## 6.1.1 – App icon
+## 6.2 – Keyboard effects and rainbow modes
+The COLOR tab gains an **EFFECT** list under the colour swatches:
+
+- **Firmware effects:** **Breathing**, **Neon**, **Wave**, **Ripple**, **Zoom**, **Snake** and **Disco**. These are
+  the controller's own animations (the bytes Nitrous/OpenRGB use): one packet starts them, the keyboard animates
+  itself, and the app sends nothing more.
+- **Rainbow flow:** the spectrum scrolls left to right across the four zones, drawn by the app so models whose
+  firmware has no rainbow mode still get a full-colour animation.
+- **Rainbow wave:** the spectrum stands still while a brightness wave runs through it, which reads as a vertical
+  wipe on the four horizontal zones.
+- The choice is saved in `HKCU\Software\KbBreathe\Effect` and restored on the next launch.
+- Only one thing owns the LEDs: picking an effect while breathing, a reaction or screen sync is running stops that
+  first, and stopping breathing or sync puts the chosen colour and effect back.
+- Picking a colour while an effect runs re-sends the effect in the new colour, no restart needed.
+- Software flows drop to about 8 fps while the window is hidden in the tray, so the app stays light; the firmware
+  effects cost nothing after their single packet.
+- The window, tab strip and colour page are unchanged in size (420 x 510), and brightness-only models still get the
+  original four tabs with no effect list.
+
+## 6.1 – More Acer models, colour, and screen sync
+KB Breathe now probes the same keyboard interfaces as [Nitrous](https://github.com/jeremyaliparo/nitrous), so it works
+on more than the four-step Nitro path:
+
+- **New tab strip:** `DASH | COLOR | KEYS | REACT | SETTINGS`. The **COLOR** tab is built only when the keyboard has
+  the colour controller; on every other model it does not exist and the strip stays
+  `DASH | KEYS | REACT | SETTINGS`, the same way Nitrous drops its light page. The nav bar now takes its tab list at
+  run time, so the two layouts map to the right pages.
+- **ENEK colour controller** (`0CF2:5130`): four-zone RGB. The device is opened once and kept open while a pattern
+  runs; colours go out as the controller's own Static packets (one per zone when the zones differ).
+- **Keyboard colour:** nine swatches on the COLOR tab, saved to `HKCU\Software\KbBreathe\Color`. Breathing patterns,
+  reactions and Sound Sync run in that colour. A change while a pattern runs applies on the next step; picking a
+  colour while stopped applies it straight away.
+- **Screen colour sync** (ported from Nitrous' `LightingSync` screen source): `StretchBlt` scales the primary display
+  into a 64x36 DIB (`CAPTUREBLT`, retried as plain `SRCCOPY` if a driver refuses it), the four screen quarters become
+  the four zone colours, and frames are written every 125 ms. A live four-zone preview sits under the toggle.
+- **One owner of the LEDs:** pressing **Start** stops screen sync, turning sync on stops the pattern or Sound Sync,
+  and reaction pulses pause sync frames instead of fighting them. Stopping sync restores the chosen colour.
+- **Acer WMI `APGeAction`:** the backlight path of the WMI-only models (Nitro V 15 `ANV15-41` and similar), addressed
+  with the keyboard hotkey Acer's agent stores in the registry (`BK_Hotkey_Number`, default 132) and keeping the
+  auto-off timeout intact. Detection requires a real answer (hotkey echo or a firmware brightness step), so a BIOS
+  that returns a constant is not mistaken for support.
+- **Backend reporting:** every write now goes through one dispatcher, and SETTINGS → BACKEND names the path in use:
+  `RGB`, `EC`, `WMI KB` or `WMI`.
+- The existing **Acer EC HID** and **`Acer_Gaming`** paths are unchanged. The Sound Sync modes, their analysis and
+  their tuning are untouched.
+- `nitrous-master/` is reference source only and is excluded from compilation in `KbBreathe.csproj`, so the app keeps
+  building as the single `Program.cs` project.
+
+## 6.0.2 – App icon
 The exe now has its own icon (`icon.ico`), shown in Explorer, the taskbar, the startup list and the tray.
 The window and tray icon are stored inside the program code, so no extra file is needed at run time. New 1280x640 social preview image.
 
-## 6.1.0 – Sound Sync-Vibe
+## 6.0.1 – Sound Sync-Vibe
 A third sound mode (pick **Sound Sync-Vibe** in the Pattern list, it is part of the cycle shortcut too). Three layers
 are stacked and the brightest one wins:
 
