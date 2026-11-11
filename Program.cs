@@ -114,7 +114,7 @@ static class Hk
 sealed class Settings
 {
     private const string Key = @"Software\KbBreathe";
-    public bool Tray = true, StartMin, Auto, ReactPower, ReactPlug, ReactUnplug;
+    public bool Tray = true, StartMin, Auto = true, ReactPower, ReactPlug, ReactUnplug;
     public int Speed = 550, SpeedTab = 2, Pattern = 0, Sens = 5;
     public string Custom = "0 1 2 3 4 3 2 1";
     public string Color = "#FFFFFF";
@@ -133,13 +133,16 @@ sealed class Settings
             {
                 s.Tray = Get(k, "Tray", 1) != 0;
                 s.StartMin = Get(k, "StartMin", 0) != 0;
-                s.Auto = Get(k, "Auto", 0) != 0;
+                s.Auto = Get(k, "Auto", 1) != 0;
                 s.ReactPower = Get(k, "ReactPower", 0) != 0;
                 s.ReactPlug = Get(k, "ReactPlug", 0) != 0;
                 s.ReactUnplug = Get(k, "ReactUnplug", 0) != 0;
                 s.Speed = M.Clamp(Get(k, "Speed", 550), 120, 2000);
                 s.SpeedTab = M.Clamp(Get(k, "SpeedTab", 2), 0, 4);
-                s.Pattern = MapPattern(Math.Max(0, Get(k, "Pattern", 0)));
+                int raw = Math.Max(0, Get(k, "Pattern", 0));
+                // PatternVer marks a value written by this five-mode list. Only saves from the
+                // old eleven-mode list get remapped; otherwise the last chosen mode survives.
+                s.Pattern = Get(k, "PatternVer", 0) >= 1 ? M.Clamp(raw, 0, 4) : MapPattern(raw);
                 s.Sens = M.Clamp(Get(k, "Sens", 5), 1, 10);
                 s.Custom = k.GetValue("Custom") as string ?? s.Custom;
                 s.Color = k.GetValue("Color") as string ?? s.Color;
@@ -185,6 +188,7 @@ sealed class Settings
             k.SetValue("Speed", Speed, RegistryValueKind.DWord);
             k.SetValue("SpeedTab", SpeedTab, RegistryValueKind.DWord);
             k.SetValue("Pattern", Pattern, RegistryValueKind.DWord);
+            k.SetValue("PatternVer", 1, RegistryValueKind.DWord);
             k.SetValue("Sens", Sens, RegistryValueKind.DWord);
             k.SetValue("Custom", Custom, RegistryValueKind.String);
             k.SetValue("Color", Color, RegistryValueKind.String);
@@ -1897,6 +1901,7 @@ sealed class MainForm : Form
     private void SetPattern(int idx)
     {
         _pattern = idx;
+        if (_s.Pattern != idx) { _s.Pattern = idx; _s.Save(); }   // remember it for the next launch
         _select.Caption = Presets[idx].Name;
         _soundModes.Selected = IsSound ? (_pattern == 2 ? 1 : 0) : -1;
         _soundDesc.Text = SoundDescription();
